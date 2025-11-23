@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Balina Radar • Pro (CVD odaklı • PENGU/PEPE spot+perp)</title>
+<style>
+  :root{
+    --bg:#0b1220; --card:#10192b; --ink:#eaf1ff; --muted:#9fb0d7;
+    --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --green:#22c55e; --stroke:#23314e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:500 15px/1.5 system-ui,Segoe UI,Roboto,Arial}
+  .wrap{max-width:1100px;margin:8px auto;padding:0 12px}
+  .title{display:flex;align-items:center;gap:10px;margin:6px 0 8px}
+  .title h2{margin:0;font-size:18px}
+  .dot{width:9px;height:9px;border-radius:99px;background:#666}
+  .dot.on{background:var(--ok)} .dot.busy{background:var(--warn)}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:#0f1730;border:1px solid var(--stroke);color:var(--muted);font-size:12px}
+  .card{background:var(--card);border:1px solid var(--stroke);border-radius:14px;padding:12px;margin:10px 0;box-shadow:0 8px 28px #0008}
+
+  /* kontroller */
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .span2{grid-column:1 / -1}
+  label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px}
+  input,select,button{width:100%;padding:11px;border-radius:10px;border:1px solid var(--stroke);background:#0f1730;color:var(--ink);font-size:16px}
+  .btn{cursor:pointer;border:0;background:linear-gradient(180deg,#0ea5e9,#2563eb);color:#fff;font-weight:700}
+  .btn.bad{background:linear-gradient(180deg,#ef4444,#dc2626)}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+  /* KPI */
+  .grid{display:grid;gap:10px}
+  .kpi{grid-template-columns:1fr}
+  @media(min-width:900px){ .kpi{grid-template-columns:1fr 1fr 1fr} }
+  .box{background:#0f1730;border:1px solid var(--stroke);border-radius:12px;padding:12px}
+  .big{font-size:28px;font-weight:900}.small{font-size:12px;color:var(--muted)}
+  .bar{height:10px;border-radius:8px;overflow:hidden;background:#13203a;border:1px solid var(--stroke)}
+  .bar>span{display:block;height:100%;background:#34d399}.bar.red>span{background:#f87171}
+
+  /* Tape */
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:8px 6px;border-bottom:1px solid #22314e;text-align:left}
+  th{color:var(--muted);font-weight:700}
+  .buy{color:var(--green)} .sell{color:#ff6b6b}
+  .tight{white-space:nowrap}
+  tr.hl1{background:rgba(52,211,153,.06)}
+  tr.hl2{background:rgba(59,130,246,.08)}
+  tr.hl3{background:linear-gradient(90deg,rgba(234,179,8,.15),rgba(59,130,246,.15))}
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .log{max-height:180px;overflow:auto;font-family:ui-monospace,Consolas,monospace;background:#0f1730;border:1px solid var(--stroke);border-radius:12px;padding:10px}
+  .log .info{color:#9fb0d7}
+  .log .warn{color:#f59e0b}
+  .log .buy{color:#22c55e}
+  .log .sell{color:#ff6b6b}
+  details{border:1px dashed var(--stroke);border-radius:10px;padding:8px}
+  details>summary{cursor:pointer;color:var(--muted);outline:none}
+
+  /* CVD satırları (üst: Alım, orta: Satım, alt: Fark) — kompakt dikey */
+  .cvd-list{margin-top:6px}
+  .cvd-list .row{
+    display:flex;align-items:baseline;justify-content:space-between;
+    padding:6px 10px; margin-top:6px;
+    border:1px solid var(--stroke);border-radius:12px;background:#0f1730;
+  }
+  .cvd-list .lbl{font-size:12px;color:var(--muted)}
+  .cvd-list .val{font-size:18px;font-weight:800;letter-spacing:.1px}
+  .cvd-list .val.pos{color:var(--ok)}
+  .cvd-list .val.neg{color:var(--bad)}
+</style>
+<script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="title">
+    <div id="lamp" class="dot"></div>
+    <h2>Balina Radar</h2>
+    <span id="lat" class="pill" style="margin-left:auto">gecikme: -- ms</span>
+  </div>
+
+  <!-- Kontroller -->
+  <div class="card controls">
+    <div>
+      <label>Sembol</label>
+      <select id="symbol">
+        <!-- Futures (Perp) -->
+        <option value="BTCUSDT">BTCUSDT (Perp)</option>
+        <option value="ETHUSDT">ETHUSDT (Perp)</option>
+        <option value="DOGEUSDT">DOGEUSDT (Perp)</option>
+        <option value="PEPEUSDT">PEPEUSDT (Perp)</option>
+        <option value="PENGUUSDT">PENGUUSDT (Perp)</option>
+        <!-- Spot -->
+        <option value="BTCUSDT|spot">BTCUSDT (Spot)</option>
+        <option value="ETHUSDT|spot">ETHUSDT (Spot)</option>
+        <option value="DOGEUSDT|spot">DOGEUSDT (Spot)</option>
+        <option value="PEPEUSDT|spot">PEPEUSDT (Spot)</option>
+        <option value="PENGUUSDT|spot">PENGUUSDT (Spot)</option>
+      </select>
+    </div>
+    <div>
+      <label>Eşik (USDT ≥)</label>
+      <input id="thr" type="number" value="500" min="1" step="50">
+    </div>
+    <div>
+      <label>Pencere (dk)</label>
+      <input id="win" type="number" value="15" min="1" max="120">
+    </div>
+    <div>
+      <label>Ses</label>
+      <select id="sound"><option value="beep">Açık</option><option value="off">Kapalı</option></select>
+    </div>
+    <div class="span2 toolbar" style="gap:14px">
+      <label for="autoThr" style="margin:0">Auto</label>
+      <input id="autoThr" type="checkbox" style="width:auto">
+      <span class="small">p90 → <b id="thrAutoTag">-</b></span>
+      <span class="small" style="margin-left:auto">Eşik: <b id="thrTag">500</b> • Pencere: <b id="winTag">15</b> dk • kalan: <b id="left">--:--</b></span>
+    </div>
+    <details class="span2">
+      <summary>Gelişmiş (Telegram bildirimi • opsiyonel)</summary>
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+        <div><label>Telegram BOT_TOKEN</label><input id="tgTok" placeholder="123456:ABC-DEF..."></div>
+        <div><label>Telegram CHAT_ID</label><input id="tgChat" placeholder="123456789"></div>
+      </div>
+    </details>
+    <div class="span2 btns">
+      <button id="start" class="btn">Başlat</button>
+      <button id="stop" class="btn bad">Durdur</button>
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="card grid kpi">
+    <div class="box">
+      
+      <div class="small">Son Fiyat</div>
+      <div id="px" class="big">--</div>
+      <div class="small">Sembol: <b id="sym">--</b> • OBI: <b id="obi">--</b> • OBI<sub>60s</sub>: <b id="obi60">--</b></div>
+      <div class="small">OBI = (bidQty−askQty)/(bidQty+askQty)</div>
+    </div>
+    <div class="box">
+      <div class="small">Balina (≥ <span id="thrTag2">500</span> USDT) – Son <span id="winTag2">15</span> dk</div>
+      <div><b id="wCnt" class="big">0</b> işlem • <b id="wVol">0 USDT</b></div>
+      <div class="small">Toplam hacim: <span id="totVol">0 USDT</span></div>
+      <div class="small">USDT akışı: <span id="flowHint">-</span> • CVD_all≈<span id="cvdAll">0</span></div>
+    </div>
+
+    <!-- CVD KARTI -->
+    <div class="box">
+<div id="candleWrap" style="height:160px;margin:-4px -4px 6px -4px;"></div>
+
+      <div class="small">CVD (Whale)</div>
+      <div class="big" id="cvdVal">0</div>
+      <div class="small">Alım / Satım Yığılma</div>
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">
+        <div><div class="small">Alım (<span id="buyPct">0%</span>)</div><div class="bar"><span id="buyBar" style="width:0%"></span></div></div>
+        <div><div class="small">Satım (<span id="sellPct">0%</span>)</div><div class="bar red"><span id="sellBar" style="width:0%"></span></div></div>
+      </div>
+      <!-- Üst: Alım, Orta: Satım, Alt: Fark — Dikey/kompakt -->
+      <div class="cvd-list">
+        <div class="row"><span class="lbl">Alım USDT</span><span id="buyUSDT" class="val">0</span></div>
+        <div class="row"><span class="lbl">Satım USDT</span><span id="sellUSDT" class="val">0</span></div>
+        <div class="row"><span class="lbl">Fark</span><span id="diffUSDT" class="val">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DURUM + LOG -->
+  <div class="card">
+    <div class="toolbar" style="margin-bottom:8px">
+      <span class="pill">Durum: <b id="stat">Hazır</b></span>
+      <span class="pill" id="restBadge">Yedek (REST): <b id="poll">PASİF</b></span>
+      <span class="pill">Sinyal: <b id="sig">Yok</b></span>
+      <span style="flex:1"></span>
+      <label class="small" for="tFilter" style="margin:0">Tape filtre</label>
+      <select id="tFilter" style="width:auto">
+        <option value="all" selected>Hepsi</option>
+        <option value="buy">Sadece Alım</option>
+        <option value="sell">Sadece Satım</option>
+      </select>
+    </div>
+    <div id="log" class="log"></div>
+  </div>
+
+  <!-- TAPE -->
+  <div class="card">
+    <div class="toolbar">
+      <h3 style="margin:0">Balina İşlem Listesi</h3>
+      <span class="small" style="margin-left:auto">Eşik üstü son <b id="tapeN">0</b> kayıt</span>
+    </div>
+    <div style="overflow:auto">
+      <table id="tape">
+        <thead>
+          <tr><th class="tight">Zaman</th><th>Yön</th><th>Fiyat</th><th>Miktar</th><th>USDT</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+(()=> {
+  // ==== UI ====
+  const $ = id=>document.getElementById(id);
+  const ui = {
+    lamp:$('lamp'),lat:$('lat'),stat:$('stat'),poll:$('poll'),sig:$('sig'),
+    symSel:$('symbol'),thr:$('thr'),autoThr:$('autoThr'),
+    thrAutoTag:$('thrAutoTag'),thrTag:$('thrTag'),thrTag2:$('thrTag2'),
+    win:$('win'),winTag:$('winTag'),winTag2:$('winTag2'), left:$('left'),
+    px:$('px'),sym:$('sym'),wCnt:$('wCnt'),wVol:$('wVol'),totVol:$('totVol'),
+    buyPct:$('buyPct'),sellPct:$('sellPct'),buyBar:$('buyBar'),sellBar:$('sellBar'),
+    buyUSDT:$('buyUSDT'),sellUSDT:$('sellUSDT'),diffUSDT:$('diffUSDT'),cvdVal:$('cvdVal'),
+    start:$('start'),stop:$('stop'),log:$('log'),sound:$('sound'),tgTok:$('tgTok'),tgChat:$('tgChat'),
+    tape:$('tape').querySelector('tbody'), tapeN:$('tapeN'), obi:$('obi'), obi60:$('obi60'), flowHint:$('flowHint'),
+    tFilter:$('tFilter'), restBadge: $('restBadge'), cvdAll:$('cvdAll'), candleWrap:$('candleWrap')
+  };
+
+  // ==== MARKET MAP ====
+  const MARKET_OF = (sel)=>{
+    const v = sel.value;
+    if(v.includes('|spot')) return {symbol:v.split('|')[0], market:'spot'};
+    return {symbol:v, market:'futures'};
+  };
+  const wsURL = (s,m)=> m==='spot'
+    ? `wss://stream.binance.com:9443/stream?streams=${s.toLowerCase()}@aggtrade/${s.toLowerCase()}@bookTicker/${s.toLowerCase()}@kline_1m`
+    : `wss://fstream.binance.com/stream?streams=${s.toLowerCase()}@aggtrade/${s.toLowerCase()}@bookTicker/${s.toLowerCase()}@kline_1m`;
+  const restURL = (s,m,l=200)=> m==='spot'
+    ? `https://api.binance.com/api/v3/aggTrades?symbol=${s}&limit=${l}`
+    : `https://fapi.binance.com/fapi/v1/aggTrades?symbol=${s}&limit=${l}`;
+
+  // ==== CONFIG ====
+  const TIER1 = 50_000, TIER2 = 200_000, TIER3 = 1_000_000;
+
+  // ==== STATE ====
+  let ws=null, pingIv=null, pollIv=null, watchdogIv=null, backoff=1000, lastMsg=0, lastBurst=0, lastAgg=0;
+  const WATCHDOG_MS = 5000;
+  const seen = new Set();
+  let tape=[], trades=[], usdtSeries=[];
+  let dirty=false, lastRender=0, tapeDirty=false, lastP90=0, obiBuf=[];
+  let startEpoch = Date.now();
+
+  
+  // ==== CANDLE CHART STATE ====
+  let candleChart = null;
+  let candleSeries = null;
+  let candleData = [];
+
+  function initCandleChart(){
+    if(!ui.candleWrap) return;
+    if(candleChart) return;
+    candleChart = LightweightCharts.createChart(ui.candleWrap, {
+      layout: {
+        background: { color: '#0f1730' },
+        textColor: '#eaf1ff'
+      },
+      grid: {
+        vertLines: { color: '#1e293b' },
+        horzLines: { color: '#1e293b' }
+      },
+      rightPriceScale: { borderColor: '#23314e' },
+      timeScale: {
+        borderColor: '#23314e',
+        rightOffset: 2,
+        barSpacing: 6
+      },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal }
+    });
+    candleSeries = candleChart.addCandlestickSeries({
+      upColor: '#22c55e',
+      downColor: '#ef4444',
+      borderUpColor: '#22c55e',
+      borderDownColor: '#ef4444',
+      wickUpColor: '#22c55e',
+      wickDownColor: '#ef4444'
+    });
+  }
+
+  function resetCandleChart(){
+    candleData = [];
+    if(candleSeries){
+      candleSeries.setData([]);
+    }
+  }
+
+  function upsertCandleFromKline(k){
+    if(!candleSeries || !k) return;
+    const bar = {
+      time: Math.floor(k.t / 1000),
+      open: parseFloat(k.o),
+      high: parseFloat(k.h),
+      low:  parseFloat(k.l),
+      close:parseFloat(k.c)
+    };
+    const last = candleData[candleData.length - 1];
+    if(last && last.time === bar.time){
+      candleData[candleData.length - 1] = bar;
+      candleSeries.update(bar);
+    } else {
+      candleData.push(bar);
+      if(candleData.length > 20){
+        candleData.shift();
+      }
+      candleSeries.setData(candleData);
+    }
+  }
+
+// helpers
+  const now = ()=>Date.now();
+  const _nfCache = {};
+  function fmt(n,d=2){
+    const k=d|0; if(!_nfCache[k]) _nfCache[k]=new Intl.NumberFormat('tr-TR',{minimumFractionDigits:k,maximumFractionDigits:k});
+    const x=Number.isFinite(n)?n:0; return _nfCache[k].format(x);
+  }
+  const log = (t,cls='info')=>{
+    const div=document.createElement('div'); div.className=cls; div.textContent=`[${new Date().toLocaleTimeString()}] ${t}`;
+    ui.log.prepend(div);
+  };
+  const keyOf = d => (d.a!==undefined ? `a${d.a}` : `${d.T||d.t}|${d.p}|${d.q}|${d.m?1:0}`);
+  const percentile=(arr,p)=>{ if(!arr.length) return 0; const a=[...arr].sort((x,y)=>x-y); const i=Math.floor(p*(a.length-1)); return a[Math.max(0,Math.min(a.length-1,i))]; };
+
+  function sweep(){
+    const ms=Number(ui.win.value||5)*60000, minT=now()-ms;
+    trades=trades.filter(x=>x.t>=minT);
+    usdtSeries=usdtSeries.filter(x=>x.t>=minT);
+  }
+
+  function setLatency(ms){
+    ui.lat.textContent=`gecikme: ${ms} ms`;
+    ui.lat.style.borderColor = ms<300? 'var(--ok)' : (ms<1200? 'var(--warn)':'var(--bad)');
+    ui.lat.style.color = ms<300? '#a7f3d0' : (ms<1200? '#fde68a':'#fecaca');
+  }
+
+  function beep(level=1){
+    if(ui.sound.value==='off') return;
+    try{
+      const ctx=new (window.AudioContext||window.webkitAudioContext)();
+      const play=(f,dur,when=0)=>{
+        const o=ctx.createOscillator(), g=ctx.createGain();
+        o.type='square'; o.frequency.value=f; o.connect(g); g.connect(ctx.destination);
+        g.gain.value=.0001; g.gain.exponentialRampToValueAtTime(.25,ctx.currentTime+when+.01);
+        o.start(ctx.currentTime+when);
+        g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+when+dur-0.02);
+        o.stop(ctx.currentTime+when+dur);
+      };
+      if(level===1){ play(900,.13,0); }
+      if(level===2){ play(900,.12,0); play(750,.12,.14); }
+      if(level===3){ play(650,.18,0); play(950,.18,.2); play(650,.18,.4); }
+    }catch{}
+  }
+
+  async function tg(msg){
+    const t=ui.tgTok.value.trim(), ch=ui.tgChat.value.trim(); if(!t||!ch) return;
+    try{ await fetch(`https://api.telegram.org/bot${t}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:ch,text:msg,disable_web_page_preview:true})}); }catch{}
+  }
+
+  // schedules
+  setInterval(()=>{
+    const t=Date.now(); if(!dirty || (t-lastRender)<250) return;
+    const thr = Number(ui.autoThr.checked ? (ui.thrTag.textContent.toString().replace(/\./g,'').replace(',', '.')) : ui.thr.value) || 0;
+    sweep(); render(thr); lastRender=t; dirty=false;
+  },60);
+  setInterval(()=>{ if(!tapeDirty) return; redrawTape(); tapeDirty=false; },120);
+  setInterval(()=>{ lastP90 = percentile(usdtSeries.map(x=>x.v),0.90); },1000);
+  setInterval(()=>{
+    // kalan süre
+    const span = Number(ui.win.value||15)*60000;
+    const left = Math.max(0, span - ((now()-startEpoch)%span));
+    const m = Math.floor(left/60000), s = Math.floor((left%60000)/1000).toString().padStart(2,'0');
+    ui.left.textContent = `${m}:${s}`;
+  },500);
+
+  function connect(){
+    cleanup();
+    const pick = MARKET_OF(ui.symSel);
+    const S = pick.symbol, M = pick.market; // futures | spot
+    ui.sym.textContent=S; ui.winTag.textContent=ui.win.value; ui.winTag2.textContent=ui.win.value;
+    ui.thrTag.textContent=ui.thr.value; ui.thrTag2.textContent=ui.thr.value;
+    startEpoch = Date.now();
+
+    resetCandleChart();
+    initCandleChart();
+
+    ws = new WebSocket(wsURL(S,M));
+    ui.stat.textContent='Bağlanıyor'; ui.lamp.className='dot busy'; lastMsg=now();
+    log(`WS bağlanıyor → ${M.toUpperCase()} ${S}`,'info');
+
+    ws.onopen=()=>{
+      ui.stat.textContent='Canlı'; ui.lamp.className='dot on'; backoff=1000; lastMsg=now();
+      pingIv=setInterval(()=>{ const d=now()-lastMsg; setLatency(d); if(d>8000) ui.lamp.className='dot busy'; if(d>20000) tryClose(); },2000);
+      log('WebSocket açıldı','info');
+
+      lastAgg=Date.now();
+      watchdogIv=setInterval(async()=>{
+        const gap=Date.now()-lastAgg;
+        if(gap<=WATCHDOG_MS){ ui.poll.textContent='PASİF'; ui.restBadge.style.background=''; return; }
+        ui.poll.textContent='AKTİF'; ui.restBadge.style.background='linear-gradient(90deg,#0e4429,#1f6f43)';
+        try{
+          const r=await fetch(restURL(S,M,120)); const arr=await r.json();
+          for(const a of arr){
+            const k=keyOf(a); if(seen.has(k)) continue; seen.add(k);
+            const t=Number(a.T||a.time||Date.now()), price=Number(a.p), qty=Number(a.q), isSell=!!a.m, usdt=price*qty;
+            trades.push({t,usdt,isSell,price}); usdtSeries.push({t,v:usdt});
+            const thr=Number(ui.thr.value)||0; if(usdt>=thr) pushTape({t,price,qty,usdt,isSell});
+          }
+          if(seen.size>1200){ const n=[...seen]; seen.clear(); n.slice(-800).forEach(x=>seen.add(x)); }
+          dirty=true; tapeDirty=true;
+        }catch(e){ log('REST istisna: '+e,'warn'); }
+      },2000);
+    };
+
+    ws.onmessage=(ev)=>{
+      lastMsg=now();
+      const obj=JSON.parse(ev.data); const d=obj.data||obj;
+
+      // bookTicker → OBI + mid/fiyat
+      if(d.u !== undefined && d.a !== undefined && d.b !== undefined){
+        const bid=Number(d.b||0), ask=Number(d.a||0);
+        const bidQty=Number(d.B||0), askQty=Number(d.A||0);
+        const obi=(bidQty+askQty)>0?(bidQty-askQty)/(bidQty+askQty):0;
+        ui.obi.textContent=(Math.round(obi*100)/100).toString();
+        obiBuf.push({t:now(),v:obi});
+        const minT=now()-60_000; obiBuf=obiBuf.filter(x=>x.t>=minT);
+        const avg = obiBuf.length? (obiBuf.reduce((a,b)=>a+b.v,0)/obiBuf.length) : 0;
+        ui.obi60.textContent=(Math.round(avg*100)/100).toString();
+        if(bid && ask) ui.px.textContent=fmt((bid+ask)/2,8);
+      }
+
+      // aggTrade
+      if(d.e==='aggTrade' || d.p){
+        lastAgg=Date.now();
+        seen.add(keyOf(d)); if(seen.size>1200){ const n=[...seen]; seen.clear(); n.slice(-800).forEach(x=>seen.add(x)); }
+
+        const price=Number(d.p), qty=Number(d.q), isSell=!!d.m, t=Number(d.T||Date.now()), usdt=price*qty;
+        if(price) ui.px.textContent=fmt(price,8);
+
+        trades.push({t,usdt,isSell,price}); usdtSeries.push({t,v:usdt});
+
+        if(ui.autoThr.checked){
+          const thrEst=Math.max(50, Math.round(lastP90||0));
+          ui.thrAutoTag.textContent=`${fmt(thrEst,0)} USDT`;
+          ui.thrTag.textContent=ui.thrTag2.textContent=fmt(thrEst,0);
+        } else {
+          ui.thrAutoTag.textContent='-';
+          ui.thrTag.textContent=ui.thrTag2.textContent=ui.thr.value;
+        }
+
+        dirty=true;
+        const thr = Number(ui.autoThr.checked ? (ui.thrTag.textContent.toString().replace(/\./g,'').replace(',', '.')) : ui.thr.value) || 0;
+        if(usdt>=thr){
+          pushTape({t,price,qty,usdt,isSell});
+          if(usdt>=TIER3) beep(3); else if(usdt>=TIER2) beep(2); else if(usdt>=TIER1) beep(1);
+          const emoji=isSell?'🔻':'🔺';
+          tg(`🐋 ${emoji} ${S} ${isSell?'SATIM':'ALIM'} • ${fmt(usdt)} USDT @ ${fmt(price,8)} • ${fmt(qty,4)} lot`);
+          burstCheck(S,thr);
+          log(`${isSell?'SATIM':'ALIM'} ${fmt(usdt)} USDT @ ${fmt(price,8)}`, isSell?'sell':'buy');
+        }
+      }
+      // kline (1m) → mum grafiği
+      if(d.e === 'kline' && d.k){
+        upsertCandleFromKline(d.k);
+      }
+
+      ui.lamp.className='dot on';
+    };
+
+    ws.onclose = ws.onerror = ()=>{ ui.stat.textContent='Koptu, yeniden bağlanıyor...'; ui.lamp.className='dot'; log('WS kapandı / hata','warn'); tryClose(); };
+
+    // WS kapalıyken REST
+    pollIv=setInterval(async()=>{
+      if(ws && ws.readyState===1){ ui.poll.textContent='PASİF'; ui.restBadge.style.background=''; return; }
+      ui.poll.textContent='AKTİF'; ui.restBadge.style.background='linear-gradient(90deg,#0e4429,#1f6f43)';
+      try{
+        const r=await fetch(restURL(S,M,200)); if(!r.ok){ log(`REST hata: HTTP ${r.status}`,'warn'); return; }
+        const arr=await r.json();
+        arr.slice(-60).forEach(a=>{
+          const t=Number(a.T||a.time||Date.now()), price=Number(a.p), qty=Number(a.q), isSell=!!a.m, usdt=price*qty;
+          trades.push({t,usdt,isSell,price}); usdtSeries.push({t,v:usdt}); ui.px.textContent=fmt(price,8);
+        });
+        dirty=true;
+      }catch(err){ log('REST istisna: '+err,'warn'); }
+    },3000);
+  }
+
+  function tryClose(){ try{ws&&ws.close(1000,'reconnect')}catch{}; reconnect(); }
+  function reconnect(){ clearInterval(pingIv); setTimeout(connect, Math.min(backoff,15000)); backoff=Math.min(backoff*2,15000); }
+  function cleanup(){
+    clearInterval(pingIv); clearInterval(pollIv); clearInterval(watchdogIv);
+    pingIv=pollIv=watchdogIv=null;
+    if(ws){ ws.onopen=ws.onmessage=ws.onclose=ws.onerror=null; try{ws.close()}catch{} }
+  }
+
+  // render
+  function render(thr){
+    const last20 = usdtSeries.slice(-20).map(x=>x.v);
+    const avg20 = last20.length? Math.round(last20.reduce((a,b)=>a+b,0)/last20.length):0;
+    const p90 = lastP90 || 0;
+    ui.flowHint.textContent = `p90≈${fmt(p90,0)} • ort20≈${fmt(avg20,0)} • thr≈${fmt(thr,0)}`;
+
+    let wCnt=0,wVol=0,tot=0,buy=0,sell=0, cvdSum=0;
+    for(const x of trades){
+      tot+=x.usdt;
+      if(x.isSell) sell+=x.usdt; else buy+=x.usdt;
+      if(x.usdt>=thr){ wCnt++; wVol+=x.usdt; cvdSum += x.isSell? -x.usdt : x.usdt; }
+    }
+    const sum=buy+sell || 1, bp=Math.round(buy*100/sum), sp=100-bp;
+    ui.wCnt.textContent=wCnt; ui.wVol.textContent=`${fmt(wVol)} USDT`; ui.totVol.textContent=`${fmt(tot)} USDT`;
+    ui.buyPct.textContent=`${bp}%`; ui.sellPct.textContent=`${sp}%`; ui.buyBar.style.width=`${bp}%`; ui.sellBar.style.width=`${sp}%`;
+
+    ui.buyUSDT.textContent  = fmt(buy);
+    ui.sellUSDT.textContent = fmt(sell);
+
+    const diff = buy - sell;
+    const diffTxt = (diff>=0?'+':'') + fmt(diff,2);
+    ui.diffUSDT.textContent = diffTxt;
+    ui.diffUSDT.classList.toggle('pos', diff>=0);
+    ui.diffUSDT.classList.toggle('neg', diff<0);
+
+    ui.cvdVal.textContent = (cvdSum>0?'+':'') + fmt(cvdSum,0);
+    ui.cvdAll.textContent = (cvdSum>0?'+':'') + fmt(cvdSum,0);
+  }
+
+  // TAPE
+  function redrawTape(){
+    const f = ui.tFilter.value;
+    const frag = document.createDocumentFragment();
+    let count=0;
+    for(const t of tape){
+      if(f==='buy' && t.isSell) continue;
+      if(f==='sell' && !t.isSell) continue;
+      const tr=document.createElement('tr');
+      if(t.usdt>=TIER3) tr.className='hl3';
+      else if(t.usdt>=TIER2) tr.className='hl2';
+      else if(t.usdt>=TIER1) tr.className='hl1';
+      tr.innerHTML = `
+        <td class="tight">${new Date(t.t).toLocaleTimeString()}</td>
+        <td class="${t.isSell?'sell':'buy'}">${t.isSell?'Satım':'Alım'}</td>
+        <td>${fmt(t.price,8)}</td>
+        <td>${fmt(t.qty,4)}</td>
+        <td>${fmt(t.usdt)}</td>`;
+      frag.appendChild(tr);
+      if(++count>=200) break;
+    }
+    ui.tape.innerHTML=''; ui.tape.appendChild(frag); ui.tapeN.textContent=tape.length;
+  }
+  function pushTape(x){ tape.unshift(x); if(tape.length>200) tape.pop(); tapeDirty=true; }
+
+  // patlama sinyali (kısa)
+  function burstCheck(sym,thr){
+    const nowT=now(); const last10s=tape.filter(x=> nowT - x.t <= 10_000);
+    const buys=last10s.filter(x=>!x.isSell).length, sells=last10s.filter(x=> x.isSell).length;
+    const obi = parseFloat(ui.obi.textContent)||0;
+    let signal='Yok';
+    if(buys>=3 && obi>0.2) signal='ALIM Patlaması';
+    else if(sells>=3 && obi<-0.2) signal='SATIM Patlaması';
+    ui.sig.textContent=signal;
+    if(signal!=='Yok' && nowT - lastBurst > 30_000){
+      tg(`⚡ ${sym} ${signal} • thr≈${fmt(thr,0)} • OBI=${(Math.round(obi*100)/100)} • 10s: ${buys}B/${sells}S`);
+      log(`${signal} | thr≈${fmt(thr,0)} OBI=${obi.toFixed(2)}`,'warn');
+      lastBurst = nowT;
+    }
+  }
+
+  // events
+  $('start').onclick=()=>{ trades=[]; tape=[]; usdtSeries=[]; ui.tape.innerHTML=''; startEpoch=Date.now(); connect(); log('Takip başlatıldı','info'); };
+  $('stop').onclick =()=>{ cleanup(); ui.stat.textContent='Durduruldu'; ui.lamp.className='dot'; ui.poll.textContent='PASİF'; ui.sig.textContent='Yok'; log('Takip durduruldu','info'); };
+  ui.win.onchange =()=>{ sweep(); ui.winTag.textContent=ui.win.value; ui.winTag2.textContent=ui.win.value; startEpoch=Date.now(); dirty=true; };
+  ui.thr.onchange =()=>{ ui.thrTag.textContent=ui.thr.value; ui.thrTag2.textContent=ui.thr.value; dirty=true; };
+  ui.symSel.onchange =()=>{ if(ws) { cleanup(); } log('Sembol değişti','info'); };
+  ui.tFilter.onchange =()=>{ tapeDirty=true; };
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ if(!ws || ws.readyState!==1) connect(); } });
+})();
+</script>
+</body>
+</html>
